@@ -33,11 +33,11 @@ class UsernoteSync:
             client_id = os.environ["client_id"],
             client_secret = os.environ["client_secret"],
             refresh_token = os.environ["refresh_token"],
-            user_agent = "linux:fashbot:v0.1 (by /u/jenbanim)"
+            user_agent = "linux:usernote_sync:v0.1 (by /u/jenbanim)"
         )
         self.subreddit = self.reddit.subreddit(os.environ["subreddit"])
         self.logger = slack_python_logging.getLogger(
-            app_name = "fashbot",
+            app_name = "usernote_sync",
             stream_loglevel = "DEBUG",
             slack_loglevel = "CRITICAL"
         )
@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
     # Log uncaught exceptions to Slack before exiting
     def log_excepthook(ex_type, ex_value, ex_traceback):
-        fashbot.logger.critical(
+        usernote_sync.logger.critical(
             "Critical Exception caught, exiting",
             exc_info=(ex_type, ex_value, ex_traceback)
         )
@@ -145,7 +145,7 @@ if __name__ == "__main__":
 
     after_epoch = time.time() # First run will be useless, but whateva
     while True:
-        new_usernotes = fashbot.get_usernotes(after_epoch = after_epoch)
-        fashbot.upload_notes(new_usernotes)
+        new_usernotes = usernote_sync.get_usernotes(after_epoch = after_epoch)
+        usernote_sync.upload_notes(new_usernotes)
         after_epoch = time.time() # set for our next run
         time.sleep(60)
