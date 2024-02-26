@@ -86,26 +86,75 @@ class UsernoteSync:
                     "note": new_note_text[:250],
                     "redditor": self.reddit.redditor(user),
                     "subreddit": self.subreddit,
-                    #"thing": new_thing
-                    "thing": None
+                    "thing": new_thing
+                    #"thing": None
                 })
         return new_notes
 
+
+    def get_usernotes_file(self, path, after_epoch = 0):
+        """Load and format a user's notes from subreddit wiki"""
+        with open(path) as f:
+            usernotes = json.load(f)
+        #usernotes = json.loads(self.subreddit.wiki["usernotes"].content_md)
+        constants = usernotes["constants"]
+        notes = json.loads(
+            decompress(b64decode(usernotes["blob"])).decode("utf-8")
+        )
+        new_notes = []
+        for user in notes:
+            for note in notes[user]["ns"]:
+                # Build new note
+                note_author = constants["users"][note["m"]]
+                if note["t"] < after_epoch:
+                    # Disregard notes from before after_epoch
+                    continue
+                note_time = time.strftime(
+                    "%Y-%m-%d",
+                    time.localtime(note["t"])
+                )
+                note_text = note["n"]
+                new_note_text = f"{note_time} | {note_author} | {note_text}"
+                # Build new label
+                note_label = constants["warnings"][note["w"]]
+                new_note_label = label_translation.get(note_label, None)
+                # Build thing
+                note_link_split = note["l"].split(",")
+                if len(note_link_split) == 1:
+                    # No link
+                    new_thing = None
+                if len(note_link_split) == 2:
+                    # Submission link
+                    submission_id = note_link_split[1]
+                    new_thing = self.reddit.submission(submission_id)
+                if len(note_link_split) == 3:
+                    # Comment link
+                    comment_id = note_link_split[2]
+                    new_thing = self.reddit.comment(comment_id)
+                new_notes.append({
+                    "label": new_note_label,
+                    "note": new_note_text[:250],
+                    "redditor": self.reddit.redditor(user),
+                    "subreddit": self.subreddit,
+                    "thing": new_thing
+                    #"thing": None
+                })
+        return new_notes
     
     def upload_notes(self, new_notes):
-        while new_notes:
-            for note in new_notes:
-                print(f"{len(new_notes)} remaining")
+        for note in new_notes:
+            while True:
+                print(f"{note['note'][:10]}")
                 try:
-                    time.sleep(1)
                     self.reddit.notes.create(**note)
-                    new_notes.remove(note)
+                    break
                 except prawcore.exceptions.TooManyRequests:
                     # I hate the API. I hate the API. I hate the API.
-                    time.sleep(5)
+                    time.sleep(1)
+                    continue
                 except praw.exceptions.RedditAPIException:
                     # Account deleted or suspended
-                    new_notes.remove(note)
+                    break
     
 
     def delete_notes(self, new_notes):
@@ -115,6 +164,7 @@ class UsernoteSync:
         me = self.reddit.user.me()
         while users:
             for user in users:
+                print(f"{len(users)} users remaining")
                 try:
                     for note in self.subreddit.mod.notes.redditors(user, limit=None):
                         if note.type != "NOTE":
@@ -127,6 +177,9 @@ class UsernoteSync:
                     time.sleep(5)
                 except praw.exceptions.RedditAPIException:
                     # Account deleted or suspended
+                    users.remove(user)
+                except prawcore.exceptions.NotFound:
+                    # Perhaps a deleted note? Unsure
                     users.remove(user)
 
 
